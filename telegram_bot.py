@@ -1,7 +1,9 @@
 import logging
 import os
 import re
+import sys
 import time
+from datetime import datetime
 
 import requests
 import urllib3
@@ -25,7 +27,12 @@ from telegram.ext import (
 
 # Configure logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8"),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -1184,10 +1191,24 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("📝 أرسل رقمك الجامعي للحصول على النتائج:")
 
 
-def main():
-    """Start the bot."""
-    logger.info("Starting bot...")
-    # Create application
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error(
+        f"Exception while handling an update: {context.error}", exc_info=context.error
+    )
+
+    # Only log errors, don't crash the bot
+    if update and isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(
+                "❌ حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
+            )
+        except Exception as e:
+            logger.error(f"Error sending error message: {e}")
+
+
+def create_application():
+    """Create and configure the bot application."""
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Add handlers
@@ -1199,10 +1220,73 @@ def main():
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_student_number)
     )
 
-    # Start the bot
-    print("🤖 Bot is starting...")
-    logger.info("Bot is starting...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Add error handler
+    application.add_error_handler(error_handler)
+
+    return application
+
+
+def run_bot_with_retry():
+    """Run the bot with automatic reconnection on errors."""
+    max_retries = float("inf")  # Retry forever
+    retry_delay = 5  # Start with 5 seconds delay
+
+    retry_count = 0
+
+    while retry_count < max_retries:
+        try:
+            logger.info(f"🤖 Bot is starting... (Attempt {retry_count + 1})")
+            print(f"🤖 Bot is starting... (Attempt {retry_count + 1})")
+
+            application = create_application()
+
+            logger.info("✅ Bot is running and polling for updates...")
+            print("✅ Bot is running and polling for updates...")
+
+            # Reset retry delay on successful start
+            retry_delay = 5
+            retry_count = 0
+
+            # Start polling - this will block until stopped or error
+            application.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=False,
+                close_loop=False,
+            )
+
+        except KeyboardInterrupt:
+            logger.info("🛑 Bot stopped by user (KeyboardInterrupt)")
+            print("🛑 Bot stopped by user")
+            break
+
+        except Exception as e:
+            retry_count += 1
+            error_msg = f"❌ Error occurred: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            print(error_msg)
+            print(f"🔄 Reconnecting in {retry_delay} seconds...")
+
+            # Exponential backoff with max delay of 60 seconds
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 60)
+
+
+def main():
+    """Main entry point for the bot."""
+    logger.info("=" * 50)
+    logger.info(f"Bot startup at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 50)
+
+    try:
+        # Run the bot with automatic reconnection
+        run_bot_with_retry()
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot stopped by user")
+        print("🛑 Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error in main: {e}", exc_info=True)
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
