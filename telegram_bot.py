@@ -16,6 +16,7 @@ load_dotenv()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from bs4 import BeautifulSoup
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import Conflict, NetworkError, TimedOut
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -1193,9 +1194,14 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""
-    logger.error(
-        f"Exception while handling an update: {context.error}", exc_info=context.error
-    )
+    error = context.error
+
+    # Don't notify users about Conflict errors (internal issue)
+    if isinstance(error, Conflict):
+        logger.warning(f"Conflict error (another instance may be running): {error}")
+        return
+
+    logger.error(f"Exception while handling an update: {error}", exc_info=error)
 
     # Only log errors, don't crash the bot
     if update and isinstance(update, Update) and update.effective_message:
@@ -1232,11 +1238,22 @@ def run_bot_with_retry():
     retry_delay = 5  # Start with 5 seconds delay
 
     retry_count = 0
+    application = None
 
     while retry_count < max_retries:
         try:
             logger.info(f"🤖 Bot is starting... (Attempt {retry_count + 1})")
             print(f"🤖 Bot is starting... (Attempt {retry_count + 1})")
+
+            # Clean up previous application if it exists
+            if application is not None:
+                try:
+                    logger.info("Cleaning up previous application instance...")
+                    application.stop()
+                    application.shutdown()
+                    time.sleep(2)  # Wait for cleanup
+                except Exception as cleanup_error:
+                    logger.warning(f"Error during cleanup: {cleanup_error}")
 
             application = create_application()
 
@@ -1250,14 +1267,66 @@ def run_bot_with_retry():
             # Start polling - this will block until stopped or error
             application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=False,
+                drop_pending_updates=True,  # Drop pending updates to avoid conflicts
                 close_loop=False,
             )
 
         except KeyboardInterrupt:
             logger.info("🛑 Bot stopped by user (KeyboardInterrupt)")
             print("🛑 Bot stopped by user")
+            if application:
+                try:
+                    application.stop()
+                    application.shutdown()
+                except Exception:
+                    pass
             break
+
+        except Conflict as e:
+            # Conflict error means another instance is running
+            retry_count += 1
+            error_msg = (
+                f"⚠️ Conflict detected: Another bot instance may be running. {str(e)}"
+            )
+            logger.warning(error_msg)
+            print(error_msg)
+            print("💡 Make sure only one instance of the bot is running.")
+            print(f"🔄 Waiting {retry_delay} seconds before retry...")
+
+            # Clean up this instance
+            if application:
+                try:
+                    application.stop()
+                    application.shutdown()
+                    time.sleep(2)
+                except Exception:
+                    pass
+                application = None
+
+            # Longer wait for conflict errors (30 seconds minimum)
+            time.sleep(max(retry_delay, 30))
+            retry_delay = min(retry_delay * 2, 120)  # Max 2 minutes for conflicts
+
+        except (TimedOut, NetworkError) as e:
+            # Network errors - retry quickly
+            retry_count += 1
+            error_msg = f"🌐 Network error: {type(e).__name__}: {str(e)}"
+            logger.warning(error_msg)
+            print(error_msg)
+            print(f"🔄 Reconnecting in {retry_delay} seconds...")
+
+            if application:
+                try:
+                    application.stop()
+                    application.shutdown()
+                except Exception:
+                    pass
+                application = None
+
+            time.sleep(retry_delay)
+            retry_delay = min(
+                retry_delay * 1.5, 30
+            )  # Max 30 seconds for network errors
 
         except Exception as e:
             retry_count += 1
@@ -1265,6 +1334,15 @@ def run_bot_with_retry():
             logger.error(error_msg, exc_info=True)
             print(error_msg)
             print(f"🔄 Reconnecting in {retry_delay} seconds...")
+
+            # Clean up on any error
+            if application:
+                try:
+                    application.stop()
+                    application.shutdown()
+                except Exception:
+                    pass
+                application = None
 
             # Exponential backoff with max delay of 60 seconds
             time.sleep(retry_delay)
