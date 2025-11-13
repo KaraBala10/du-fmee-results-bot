@@ -1363,8 +1363,8 @@ def run_bot_with_retry():
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
-    logger.info(f"Starting Flask server on port {port}")
-    app.run(host="0.0.0.0", port=port)
+    logger.info(f"Starting Flask (waitress) server on port {port}")
+    serve(app, host="0.0.0.0", port=port)
 
 
 def main():
