@@ -2,12 +2,14 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
 from datetime import datetime
 
 import requests
 import urllib3
 from dotenv import load_dotenv
+from flask import Flask
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +38,15 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+
+# Flask app (for hosting/health check)
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return "Bot is running ✅", 200
+
 
 # Bot token from environment variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -921,7 +932,7 @@ def filter_marks_by_academic_year(marks_data, academic_year, specialization=None
 
     # Filter data to include only subjects from the academic year
     filtered_data = []
-    logger.info(f"Looking for subjects in academic year {year_key}")
+    logger.info(f"Looking for subjects in academic year {academic_year}")
     logger.info(f"Target subjects: {target_subjects[:3]}...")  # Show first 3
     logger.info(f"Total subjects to search: {len(marks_data['data'])}")
 
@@ -1350,14 +1361,20 @@ def run_bot_with_retry():
 
 
 def main():
-    """Main entry point for the bot."""
+    """Main entry point for the bot and Flask app."""
     logger.info("=" * 50)
     logger.info(f"Bot startup at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("=" * 50)
 
     try:
-        # Run the bot with automatic reconnection
-        run_bot_with_retry()
+        # Run the bot in a background thread
+        bot_thread = threading.Thread(target=run_bot_with_retry, daemon=True)
+        bot_thread.start()
+
+        # Start Flask app (for hosting/health check)
+        port = int(os.environ.get("PORT", 5000))
+        logger.info(f"Starting Flask server on port {port}")
+        app.run(host="0.0.0.0", port=port)
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user")
         print("🛑 Bot stopped by user")
