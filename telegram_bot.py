@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -1245,6 +1246,9 @@ def create_application():
 
 def run_bot_with_retry():
     """Run the bot with automatic reconnection on errors."""
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     max_retries = float("inf")  # Retry forever
     retry_delay = 5  # Start with 5 seconds delay
 
