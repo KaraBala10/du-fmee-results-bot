@@ -1246,9 +1246,6 @@ def create_application():
 
 def run_bot_with_retry():
     """Run the bot with automatic reconnection on errors."""
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     max_retries = float("inf")  # Retry forever
     retry_delay = 5  # Start with 5 seconds delay
 
@@ -1364,6 +1361,12 @@ def run_bot_with_retry():
             retry_delay = min(retry_delay * 2, 60)
 
 
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    logger.info(f"Starting Flask server on port {port}")
+    app.run(host="0.0.0.0", port=port)
+
+
 def main():
     """Main entry point for the bot and Flask app."""
     logger.info("=" * 50)
@@ -1371,14 +1374,12 @@ def main():
     logger.info("=" * 50)
 
     try:
-        # Run the bot in a background thread
-        bot_thread = threading.Thread(target=run_bot_with_retry, daemon=True)
-        bot_thread.start()
+        # Run Flask (health check) in a background thread
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start()
 
-        # Start Flask app (for hosting/health check)
-        port = int(os.environ.get("PORT", 5000))
-        logger.info(f"Starting Flask server on port {port}")
-        app.run(host="0.0.0.0", port=port)
+        # Run the bot in the main thread
+        run_bot_with_retry()
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user")
         print("🛑 Bot stopped by user")
