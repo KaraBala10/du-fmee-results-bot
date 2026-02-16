@@ -1,0 +1,545 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "07491826-a982-48b8-b030-9871cb0554b5",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1104,
+        640
+      ],
+      "webhookId": "272154a8-624c-413b-a314-572268c6cb6e",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nlet messageType = 'unknown';\nlet chatId = null;\nlet text = '';\n\nif (data.callback_query) {\n  messageType = 'callback_query';\n  chatId = data.callback_query.message?.chat?.id;\n} else if (data.message) {\n  chatId = data.message.chat?.id;\n  text = (data.message.text || '').trim();\n\n  if (text === '/start') {\n    messageType = 'start';\n  } else if (text === '/help') {\n    messageType = 'help';\n  } else if (text === '/get_marks') {\n    messageType = 'get_marks';\n  } else if (/^\\d{10}$/.test(text)) {\n    messageType = 'student_number';\n  }\n}\n\nreturn [{\n  json: {\n    ...data,\n    _messageType: messageType,\n    _chatId: chatId,\n    _text: text\n  }\n}];"
+      },
+      "id": "a1dc80d9-1f99-4a87-ac70-7b5360b53cb2",
+      "name": "Detect Message Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -864,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._messageType }}",
+                    "rightValue": "callback_query",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "0e7e22bb-9f81-4417-9ed4-1e05c82f7f13"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Callback Query"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._messageType }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "42935914-5a2d-404f-94b0-1a5f6824f7a7"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._messageType }}",
+                    "rightValue": "help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a560c426-fb71-4304-8ecb-eab0c4b09e7a"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._messageType }}",
+                    "rightValue": "get_marks",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "30d55410-aac6-458c-84ca-1cd419b12eb9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "/get_marks"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._messageType }}",
+                    "rightValue": "student_number",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "79ef6152-aea0-4d28-a14c-7716e6e4a8d4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Student Number"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "bb02134d-b879-4d24-a483-46da3f27338a",
+      "name": "Route Message",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -624,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst callbackData = data.callback_query?.data || '';\nconst chatId = data.callback_query?.message?.chat?.id;\nconst messageId = data.callback_query?.message?.message_id;\n\n// callback_data format: year_{academicYear}_{specialization}_{studentNumber}\nconst parts = callbackData.split('_');\n\nlet academicYear = '';\nlet specialization = null;\nlet studentNumber = '';\n\nif (parts.length >= 4 && parts[0] === 'year') {\n  academicYear = parts[1];\n  specialization = parts[2] === 'none' ? null : parts[2];\n  studentNumber = parts[3];\n}\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    message_id: messageId,\n    student_number: studentNumber,\n    academic_year: academicYear,\n    specialization: specialization,\n    department_id: '2'\n  }\n}];"
+      },
+      "id": "e9d62e12-cd85-4754-99ed-697028f547f3",
+      "name": "Parse Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.50.54:5000/api/get_marks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ student_number: $json.student_number, academic_year: $json.academic_year, specialization: $json.specialization, department_id: $json.department_id }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "fe13e2b6-17bd-4fc0-986f-76e6fad3d41d",
+      "name": "Fetch Marks from API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -128,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Parse Callback').item.json.chat_id }}",
+        "text": "={{ $json.formatted_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6f468540-1a12-424b-9169-60c2fb6c9442",
+      "name": "Send Results",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        352
+      ],
+      "webhookId": "5b497cff-5041-464c-bfde-fadba6bc5239",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json._chatId }}",
+        "text": "🎓 مرحباً بك في بوت علاماتي - نتائج جامعة دمشق\nكلية الهندسة الميكانيكية والكهربائية\n\nيمكنك الحصول على نتائجك الامتحانية بسهولة!\n\n📋 الأوامر المتاحة:\n/help - المساعدة\n/get\\_marks - الحصول على النتائج\n\n💡 أو أرسل رقمك الجامعي مباشرة (10 أرقام)",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9a21e6b0-5fba-43a9-95a1-ba887c10456c",
+      "name": "Send Welcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        496
+      ],
+      "webhookId": "b95fac1a-74b8-4be8-b074-a89d31e2beb1",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json._chatId }}",
+        "text": "🔍 كيفية استخدام بوت علاماتي:\n\n1️⃣ أرسل رقمك الجامعي (10 أرقام)\n2️⃣ اختر السنة الدراسية\n3️⃣ احصل على نتائجك!\n\n📞 للدعم: تواصل مع المطور @karabala10",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b111463d-babc-447f-94b9-4ba6ef03e227",
+      "name": "Send Help",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        656
+      ],
+      "webhookId": "29bc0dce-cfda-4394-8dce-098f93bd9409",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json._chatId }}",
+        "text": "📝 أرسل رقمك الجامعي (10 أرقام) للحصول على النتائج:",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "38157b06-d28d-4f2f-a734-b7ca1f8bff75",
+      "name": "Send Get Marks Prompt",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        816
+      ],
+      "webhookId": "ae6a7392-c8f7-41b4-bdb7-cbd10f7929dd",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst studentNumber = data._text;\nconst chatId = data._chatId;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    student_number: studentNumber\n  }\n}];"
+      },
+      "id": "db9488a9-872d-4284-89ca-e80bb5ae8ebc",
+      "name": "Prepare Keyboard Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ '✅ رقمك الجامعي: ' + $json.student_number + '\\n\\n📚 اختر السنة الدراسية:' }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الأولى",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_1_none_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الثانية",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_2_none_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الثالثة",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_3_none_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الرابعة - حواسيب",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_4_computers_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الرابعة - تحكم",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_4_control_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الخامسة - حواسيب",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_5_computers_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "السنة الخامسة - تحكم",
+                    "additionalFields": {
+                      "callback_data": "={{ 'year_5_control_' + $json.student_number }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "3e4900fc-0cda-4ff8-ba0a-07aaf5d2ee2e",
+      "name": "Send Year Selection",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -128,
+        976
+      ],
+      "webhookId": "fead2f72-373d-439c-8cba-66c6c5b0bc97",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Detect Message Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Message Type": {
+      "main": [
+        [
+          {
+            "node": "Route Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Message": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Get Marks Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Keyboard Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback": {
+      "main": [
+        [
+          {
+            "node": "Fetch Marks from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Marks from API": {
+      "main": [
+        [
+          {
+            "node": "Send Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Keyboard Data": {
+      "main": [
+        [
+          {
+            "node": "Send Year Selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bbf0e19ecccc6e307b050c90447376caa0b30c13d8d2b3f158db161ebb1371c4"
+  }
+}
