@@ -8,13 +8,13 @@
         ],
         "additionalFields": {}
       },
-      "id": "07491826-a982-48b8-b030-9871cb0554b5",
+      "id": "679d6810-3d71-460d-a49e-41277395efcf",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1.1,
       "position": [
-        -1104,
-        640
+        -1664,
+        1264
       ],
       "webhookId": "272154a8-624c-413b-a314-572268c6cb6e",
       "credentials": {
@@ -28,13 +28,13 @@
       "parameters": {
         "jsCode": "const data = $input.first().json;\n\nlet messageType = 'unknown';\nlet chatId = null;\nlet text = '';\n\nif (data.callback_query) {\n  messageType = 'callback_query';\n  chatId = data.callback_query.message?.chat?.id;\n} else if (data.message) {\n  chatId = data.message.chat?.id;\n  text = (data.message.text || '').trim();\n\n  if (text === '/start') {\n    messageType = 'start';\n  } else if (text === '/help') {\n    messageType = 'help';\n  } else if (text === '/get_marks') {\n    messageType = 'get_marks';\n  } else if (/^\\d{10}$/.test(text)) {\n    messageType = 'student_number';\n  }\n}\n\nreturn [{\n  json: {\n    ...data,\n    _messageType: messageType,\n    _chatId: chatId,\n    _text: text\n  }\n}];"
       },
-      "id": "a1dc80d9-1f99-4a87-ac70-7b5360b53cb2",
+      "id": "cc26d7be-c689-404f-bea6-104391047fe3",
       "name": "Detect Message Type",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -864,
-        640
+        -1424,
+        1264
       ]
     },
     {
@@ -167,32 +167,56 @@
           "fallbackOutput": "extra"
         }
       },
-      "id": "bb02134d-b879-4d24-a483-46da3f27338a",
+      "id": "3ef2bd8a-f212-4729-bfee-fd752d0551ed",
       "name": "Route Message",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        -624,
-        592
+        -1184,
+        1216
       ]
     },
     {
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst callbackData = data.callback_query?.data || '';\nconst chatId = data.callback_query?.message?.chat?.id;\nconst messageId = data.callback_query?.message?.message_id;\n\n// callback_data format: year_{academicYear}_{specialization}_{studentNumber}\nconst parts = callbackData.split('_');\n\nlet academicYear = '';\nlet specialization = null;\nlet studentNumber = '';\n\nif (parts.length >= 4 && parts[0] === 'year') {\n  academicYear = parts[1];\n  specialization = parts[2] === 'none' ? null : parts[2];\n  studentNumber = parts[3];\n}\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    message_id: messageId,\n    student_number: studentNumber,\n    academic_year: academicYear,\n    specialization: specialization,\n    department_id: '2'\n  }\n}];"
       },
-      "id": "e9d62e12-cd85-4754-99ed-697028f547f3",
+      "id": "1b5cd367-156d-4f63-a90d-54ef60e81219",
       "name": "Parse Callback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -368,
-        352
+        -928,
+        976
       ]
     },
     {
       "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "⏳ يتم الآن جلب العلامات...",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "5e6ee4a8-9524-441b-987c-cc46dc29c122",
+      "name": "Send Loading Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -688,
+        976
+      ],
+      "webhookId": "4db81df0-6dc1-4628-a2d5-c2f4221cf90b",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "http://192.168.50.54:5000/api/get_marks",
+        "url": "https://du-fmee-results-bot.vercel.app/api/get_marks",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -204,35 +228,36 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ student_number: $json.student_number, academic_year: $json.academic_year, specialization: $json.specialization, department_id: $json.department_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ student_number: $('Parse Callback').item.json.student_number, academic_year: $('Parse Callback').item.json.academic_year, specialization: $('Parse Callback').item.json.specialization, department_id: $('Parse Callback').item.json.department_id }) }}",
         "options": {
           "timeout": 60000
         }
       },
-      "id": "fe13e2b6-17bd-4fc0-986f-76e6fad3d41d",
+      "id": "f49123fb-db6a-4ded-97e3-244510847b7e",
       "name": "Fetch Marks from API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -128,
-        352
-      ]
+        -448,
+        976
+      ],
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
+        "operation": "editMessageText",
         "chatId": "={{ $('Parse Callback').item.json.chat_id }}",
+        "messageId": "={{ $('Send Loading Message').item.json.result.message_id }}",
         "text": "={{ $json.formatted_text }}",
-        "additionalFields": {
-          "appendAttribution": false
-        }
+        "additionalFields": {}
       },
-      "id": "6f468540-1a12-424b-9169-60c2fb6c9442",
+      "id": "14527945-9fc1-4e59-af5c-9c951b15e8fa",
       "name": "Send Results",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        112,
-        352
+        -208,
+        976
       ],
       "webhookId": "5b497cff-5041-464c-bfde-fadba6bc5239",
       "credentials": {
@@ -250,13 +275,13 @@
           "appendAttribution": false
         }
       },
-      "id": "9a21e6b0-5fba-43a9-95a1-ba887c10456c",
+      "id": "3cb0368a-0766-4ec1-9647-db28770a856a",
       "name": "Send Welcome",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -368,
-        496
+        -928,
+        1120
       ],
       "webhookId": "b95fac1a-74b8-4be8-b074-a89d31e2beb1",
       "credentials": {
@@ -274,13 +299,13 @@
           "appendAttribution": false
         }
       },
-      "id": "b111463d-babc-447f-94b9-4ba6ef03e227",
+      "id": "78835224-a983-4a2c-bae8-2b77c58a15f4",
       "name": "Send Help",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -368,
-        656
+        -928,
+        1280
       ],
       "webhookId": "29bc0dce-cfda-4394-8dce-098f93bd9409",
       "credentials": {
@@ -298,13 +323,13 @@
           "appendAttribution": false
         }
       },
-      "id": "38157b06-d28d-4f2f-a734-b7ca1f8bff75",
+      "id": "c4f4a7c6-03c6-47ee-a5db-5a66e555de4e",
       "name": "Send Get Marks Prompt",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -368,
-        816
+        -928,
+        1440
       ],
       "webhookId": "ae6a7392-c8f7-41b4-bdb7-cbd10f7929dd",
       "credentials": {
@@ -318,13 +343,13 @@
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst studentNumber = data._text;\nconst chatId = data._chatId;\n\nreturn [{\n  json: {\n    chat_id: chatId,\n    student_number: studentNumber\n  }\n}];"
       },
-      "id": "db9488a9-872d-4284-89ca-e80bb5ae8ebc",
+      "id": "fcef06f6-34d2-40ab-9a90-02347ca19ab5",
       "name": "Prepare Keyboard Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -368,
-        976
+        -928,
+        1600
       ]
     },
     {
@@ -424,15 +449,39 @@
           "appendAttribution": false
         }
       },
-      "id": "3e4900fc-0cda-4ff8-ba0a-07aaf5d2ee2e",
+      "id": "c329f494-1a9e-4879-8fbc-14a874a024f1",
       "name": "Send Year Selection",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -128,
-        976
+        -688,
+        1600
       ],
       "webhookId": "fead2f72-373d-439c-8cba-66c6c5b0bc97",
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Parse Callback').item.json.chat_id }}",
+        "messageId": "={{ $('Send Loading Message').item.json.result.message_id }}",
+        "text": "❌ لم يتم العثور على نتائج. تأكد من صحة البيانات.\n\n🔧 الأسباب المحتملة:\n• رقم الطالب غير صحيح\n• مشكلة في الاتصال بالموقع\n• الموقع غير متاح مؤقتاً\n\n🔄 حاول مرة أخرى بعد قليل.",
+        "additionalFields": {}
+      },
+      "id": "beed97e7-1ed2-4268-abab-314f0814a884",
+      "name": "Send Error Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -208,
+        1120
+      ],
+      "webhookId": "7f796fd8-5563-4d63-845a-5c564d1b5820",
       "credentials": {
         "telegramApi": {
           "id": "4TFkbtvb5pvEuAuC",
@@ -448,14 +497,15 @@
           "appendAttribution": false
         }
       },
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "id": "dbb36c15-947b-4bc9-b569-e97ae8513acb",
       "name": "Send Invalid Input",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        -368,
-        1136
+        -928,
+        1760
       ],
+      "webhookId": "5aad90ab-878f-44cb-9c5c-315c931a74e5",
       "credentials": {
         "telegramApi": {
           "id": "4TFkbtvb5pvEuAuC",
@@ -537,6 +587,17 @@
       "main": [
         [
           {
+            "node": "Send Loading Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Loading Message": {
+      "main": [
+        [
+          {
             "node": "Fetch Marks from API",
             "type": "main",
             "index": 0
@@ -549,6 +610,13 @@
         [
           {
             "node": "Send Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Message",
             "type": "main",
             "index": 0
           }
