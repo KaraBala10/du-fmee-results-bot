@@ -164,7 +164,7 @@
           ]
         },
         "options": {
-          "fallbackOutput": "none"
+          "fallbackOutput": "extra"
         }
       },
       "id": "bb02134d-b879-4d24-a483-46da3f27338a",
@@ -439,6 +439,29 @@
           "name": "random videos bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json._chatId }}",
+        "text": "❌ رقم جامعي غير صحيح. يجب أن يكون 10 أرقام.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Send Invalid Input",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        1136
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "4TFkbtvb5pvEuAuC",
+          "name": "random videos bot"
+        }
+      }
     }
   ],
   "connections": {
@@ -497,6 +520,13 @@
         [
           {
             "node": "Prepare Keyboard Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Invalid Input",
             "type": "main",
             "index": 0
           }
