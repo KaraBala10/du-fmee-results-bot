@@ -25,7 +25,6 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("api.log", encoding="utf-8"),
     ],
 )
 logger = logging.getLogger(__name__)
